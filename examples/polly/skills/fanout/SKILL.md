@@ -1,6 +1,6 @@
 ---
 name: fanout
-description: Run independent subtasks in parallel — one git worktree and one implementation sub-agent per task, each opening its own PR — then cross-review every PR. polly never merges; the human does.
+description: Run independent subtasks in parallel — one git worktree and one implementation sub-agent per task, each opening its own PR — then independently cross-review and auto-merge eligible PRs.
 ---
 
 # fanout — safe parallel execution
@@ -38,12 +38,14 @@ dependency).
    worker conversation with `sys_session_get_history` before deciding what to do
    next.
 4. Send each finished task's PR through `cross-review`.
-5. polly does NOT merge — the PR is the deliverable. When cross-review passes,
-   the task is done: mark it ready in the registry with its PR URL and leave it
-   for the human to review and merge. Never run `git merge` / `gh pr merge`.
-6. Remove a finished worktree (`git worktree remove`) only once its PR is open
-   and review is clean — the branch lives on the remote, so the worktree is
-   disposable. Don't remove a worktree that still has open fix-tasks.
+5. After cross-review passes, load the bundled auto-merge skill and apply its
+   eligibility checks. The orchestrator alone merges eligible PRs through GitHub.
+   Record reviewed, blocked, queued, or merged accurately; a pending or failed
+   merge is not completed work. Keep merge operations sequential per target
+   branch and revalidate each remaining PR after that branch advances.
+6. Remove a finished worktree (`git worktree remove`) only after GitHub confirms
+   the PR is merged and there are no open fix-tasks. Preserve worktrees for
+   blocked or queued PRs so validation and fixes remain possible.
 
 ## Notes
 - Respect the per-turn dispatch cap (enforced by policy). More tasks than the
@@ -57,6 +59,6 @@ dependency).
 - A sub-agent that returns a dark or failing result: don't re-prompt it in a
   loop — re-dispatch a fresh implementation sub-agent in a clean worktree, or
   escalate to the user.
-- Because polly never merges, cross-PR conflicts surface when the human merges,
-  not here. Keeping each parallel task's file scope disjoint is what keeps that
-  rare — honor it.
+- Parallel implementation does not imply parallel merging. A preceding merge
+  may invalidate another PR's base, gates, or review. Revalidate against the new
+  base before merging the next PR; delegate conflict fixes to its implementer.

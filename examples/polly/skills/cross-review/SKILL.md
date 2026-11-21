@@ -27,7 +27,7 @@ anyone needs to read through.
    `grep -c 'def test_'` as a pytest count: it counts functions, not collected
    cases, and misses parametrized case expansion.
 3. Dispatch a DIFFERENT-vendor sub-agent as reviewer: pick any AVAILABLE worker
-   whose vendor differs from the implementer's — `claude_code`, `codex`,
+   whose actual model vendor differs from the implementer's — `claude_code`, `codex`,
    `opencode`, `cursor`, `hermes`, `agy`, or `pi` (e.g. Claude built it → any of
    `codex` / `opencode` / `cursor` / `hermes` / `agy` / `pi`, and so on). Use a
    task-based title such as `review-auth-refactor`, never the raw vendor name:
@@ -54,9 +54,12 @@ anyone needs to read through.
    `purpose: "implement"`, so the worker keeps its worktree/branch context and
    updates its existing PR. A new title would spawn a fresh worker with no
    memory of the task. Then loop to step 1.
-6. When gates are green AND there are zero blocking issues, the PR passes
-   review — mark it ready in the registry (with its PR URL) and leave it for
-   the human to merge. polly does NOT merge it.
+6. When gates are green AND there are zero blocking issues, record the clean
+   review in the registry with the PR URL, base and head SHAs, snapshot path,
+   reviewer conversation, actual model vendor, and validation commands/results.
+   Mark it reviewed, then load the bundled auto-merge skill. Merge eligibility
+   requires that skill's additional checks; review alone does not complete the
+   task. Never merge from inside a reviewer session.
 7. If the contract can't be satisfied after a few loops, stop and escalate to
    the user with specifics.
 
@@ -67,6 +70,9 @@ anyone needs to read through.
   is available on the machine, you CANNOT run independent cross-vendor review:
   don't dispatch a reviewer that can't boot, say so explicitly, and pull in the
   human at the plan gate.
+- Determine independence from actual model vendors, not worker names: two
+  different harnesses running the same vendor's models are not independent.
+  Unknown model vendor blocks automatic merging.
 - Give the reviewer ONLY the diff snapshot + contract — never the implementer's
   transcript or worktree. The cross-vendor independence is the whole point.
 - Review is a coding sub-agent (`claude_code`/`codex`/`opencode`/`cursor`/`hermes`/`agy`/`pi`) dispatched with
