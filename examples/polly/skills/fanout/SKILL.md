@@ -1,6 +1,6 @@
 ---
 name: fanout
-description: Run independent subtasks in parallel — one git worktree and one implementation sub-agent per task, each opening its own PR — then independently cross-review and auto-merge eligible PRs.
+description: Run independent subtasks in parallel — one git worktree and one implementation sub-agent per task, each opening its own PR — then cross-review every PR and merge those that pass.
 ---
 
 # fanout — safe parallel execution
@@ -38,14 +38,10 @@ dependency).
    worker conversation with `sys_session_get_history` before deciding what to do
    next.
 4. Send each finished task's PR through `cross-review`.
-5. After cross-review passes, load the bundled auto-merge skill and apply its
-   eligibility checks. The orchestrator alone merges eligible PRs through GitHub.
-   Record reviewed, blocked, queued, or merged accurately; a pending or failed
-   merge is not completed work. Keep merge operations sequential per target
-   branch and revalidate each remaining PR after that branch advances.
-6. Remove a finished worktree (`git worktree remove`) only after GitHub confirms
-   the PR is merged and there are no open fix-tasks. Preserve worktrees for
-   blocked or queued PRs so validation and fixes remain possible.
+5. When cross-review passes, merge the PR per the `auto-merge` skill.
+6. Remove a finished worktree (`git worktree remove`) only once its PR is open
+   and review is clean — the branch lives on the remote, so the worktree is
+   disposable. Don't remove a worktree that still has open fix-tasks.
 
 ## Notes
 - Respect the per-turn dispatch cap (enforced by policy). More tasks than the
@@ -59,6 +55,5 @@ dependency).
 - A sub-agent that returns a dark or failing result: don't re-prompt it in a
   loop — re-dispatch a fresh implementation sub-agent in a clean worktree, or
   escalate to the user.
-- Parallel implementation does not imply parallel merging. A preceding merge
-  may invalidate another PR's base, gates, or review. Revalidate against the new
-  base before merging the next PR; delegate conflict fixes to its implementer.
+- Cross-PR conflicts surface at merge time, not here. Keeping each parallel
+  task's file scope disjoint is what keeps that rare — honor it.
