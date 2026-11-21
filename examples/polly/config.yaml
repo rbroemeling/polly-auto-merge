@@ -2,8 +2,7 @@ spec_version: 1
 name: polly-auto-merge
 description: >-
   A coding orchestrator that delegates larger tasks to coding agents across
-  different harnesses, with an independent reviewer double-checking their work,
-  and merges PRs that pass.
+  different harnesses, with an independent reviewer double-checking their work.
 
 # Beyond the declared sub-agents (tools.agents below), polly may also spawn
 # child sessions it defines itself: spawn: true registers

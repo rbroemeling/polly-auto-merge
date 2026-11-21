@@ -15,11 +15,8 @@ not to.
    `gh pr merge <number> --repo <owner/repo> --squash --match-head-commit <reviewed-head-sha>`
    (use the repository's allowed merge method if squash is not allowed).
    Never use `--admin` or otherwise bypass required checks, approvals, or
-   branch protections. Do not use `--auto`: it stays enabled for later,
-   unreviewed pushes. If required checks are still pending, wait and retry.
+   branch protections. Do not use `--auto`. If required checks are still
+   pending, wait and retry.
 3. Confirm with `gh pr view <number> --repo <owner/repo> --json state,mergeCommit`
    that the state is `MERGED`. Otherwise report the PR as not merged, with
    GitHub's blocker.
-4. Merge PRs that target the same branch one at a time. If GitHub then reports
-   that a remaining PR conflicts or must be updated, send the update to its
-   implementer and run `cross-review` again before merging it.
