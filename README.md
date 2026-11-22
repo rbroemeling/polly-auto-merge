@@ -4,6 +4,18 @@ Default Polly agents delegate implementation and independent review, then leave 
 
 RoboPolly is meant to be the thinnest possible changeset on top of the default Polly agent in https://github.com/omnigent-ai/omnigent (Apache-2.0; see `LICENSE` and `NOTICE`).
 
+## Installing on Local Omnigent
+
+```sh
+./robopolly-install
+```
+
+The script fetches `main` from `origin` and installs the committed `robo-polly/`
+bundle on the local Omnigent server. Run it again to update the installed agent.
+The script warns if local or staged `robo-polly/` content differs from the
+fetched bundle, or if `robo-polly/` contains untracked files outside Git's ignore
+rules. It then installs the fetched bundle.
+
 ## Tracking Upstream Polly
 
 RoboPolly tracks the pristine Polly bundle in the published [Omnigent PyPI
