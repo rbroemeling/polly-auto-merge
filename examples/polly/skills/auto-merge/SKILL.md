@@ -32,12 +32,14 @@ not to.
    yet, wait for PR events instead of polling. Start this in the background:
    `gh event listen --resource <pr-url> --event com.github.pull_request.review.submitted.v1,com.github.pull_request.check_suite.status.changed.v1,com.github.pull_request.head.changed.v1,com.github.pull_request.state.changed.v1,com.github.pull_request.merge_conflict.v1`
    Each time it prints a `Listening for events` line to stderr, check the PR
-   again, because earlier events are not replayed. When it exits after an event,
-   return to step 1. An event only prompts this recheck; GitHub's requirements
-   still decide. Each check-suite event covers one suite, and commit statuses
-   send none, so read all checks with `gh pr checks`. If `gh event listen` is
-   unavailable or GitHub refuses access (for example, a 403 because the
-   account lacks the event-stream preview), report that as the blocker.
+   again, because earlier events are not replayed; if it can now be merged or
+   is no longer open, stop the listener and continue. When it exits after an
+   event, return to step 1. An event only prompts this recheck; GitHub's
+   requirements still decide. Each check-suite event covers one suite, and
+   commit statuses send none, so read all checks with `gh pr checks`; if only
+   checks that send no events still block the merge, report that as the
+   blocker. If `gh event listen` is unavailable or GitHub refuses access,
+   report that as the blocker.
 4. Confirm with `gh pr view <number> --repo <owner/repo> --json state,mergeCommit`
    that the state is `MERGED`. Otherwise report the PR as not merged, with
    GitHub's blocker.
