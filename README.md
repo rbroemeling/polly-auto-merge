@@ -7,7 +7,7 @@ RoboPolly is meant to be the thinnest possible changeset on top of the default P
 ## Installing on Local Omnigent
 
 ```sh
-./polly-install
+./robopolly-install
 ```
 
 The script fetches `main` from `origin` and installs the committed `robo-polly/`
