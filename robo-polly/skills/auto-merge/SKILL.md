@@ -10,12 +10,12 @@ existing PRs the user explicitly included. Do not merge if the user asked you
 not to.
 
 1. Read fresh PR status with
-   `gh pr view <number> --repo <owner/repo> --json state,isDraft,headRefOid,baseRefName,mergeable,mergeStateStatus`.
+   `gh pr view <number> --repo <owner/repo> --json state,isDraft,headRefOid,baseRefName,baseRefOid,mergeable,mergeStateStatus`.
    For an already merged PR, go to step 5. For a closed or draft PR, report
    the blocker. On an open, non-draft PR, `mergeable: CONFLICTING` or
    `mergeStateStatus: DIRTY` triggers **Merge conflicts** below, not a stop.
    Check that the current head SHA is the one that passed `cross-review`;
-   if it changed, run `cross-review` again first. If mergeability is still
+   if it changed, run `cross-review` again first. If mergeability is
    `UNKNOWN`, use `wait-for-github` to await an event or timeout window, then
    reread status from this step within the same deadline; do not merge on
    unknown status or retry in a tight loop. Report a blocker at the deadline.
@@ -61,23 +61,28 @@ not to.
 
 ## Merge conflicts
 
-Conflicts alone are implementation work, not a user blocker. Keep a per-PR
-resolution attempt count and in-flight worker handle in the registry; status
-refreshes, head changes, and worker replacement must not reset the count or
-dispatch duplicate work. Allow at most two resolution attempts before
-escalating if still unresolved. After the first failure, retry only with
-concrete corrective instructions, using existing recovery for dark/failing
-workers; never re-dispatch in a loop with the same instructions.
+Conflicts alone are implementation work, not a user blocker. In the registry,
+track failed resolution attempts per PR conflict episode (keyed by its initial
+base SHA), plus the in-flight worker handle. Until resolution passes the
+orchestrator's gates and fresh clean review, keep that episode active: status
+refreshes, base/head changes, and worker replacement must not reset its failure
+count or dispatch duplicate work. Count each failed attempt once, including a
+worker failure, a still-conflicting result, orchestrator gate failures, or a
+blocking review. After one failure, retry with concrete corrective instructions,
+using existing recovery for dark/failing workers; after two failures, escalate.
+Reset only after gates and new review pass, so later base updates start new
+episodes without accumulating past successful resolutions.
 
 1. Record a conflict fix-task with the PR URL, current base branch,
    last-reviewed head SHA, original task/acceptance contract, file scope, and
    required gates. Send it to the SAME original implementer conversation via
    `sys_session_send`, reusing its `agent` + `title` (or `session_id`) with
-   `purpose: "implement"`, as in `cross-review`. Record the attempt before
-   dispatch and follow the usual inbox lifecycle. If the original worker or
-   worktree is unavailable, apply the existing fresh-worker recovery rules
+   `purpose: "implement"`, as in `cross-review`. Record the active dispatch and
+   follow the usual inbox lifecycle. If the original worker or worktree is
+   unavailable, apply the existing fresh-worker recovery rules
    in a clean worktree on the existing PR branch, with the same contract and
-   attempt count; do not make the conflict alone a user blocker.
+   failure count; do not make the conflict alone a user blocker. Record who
+   actually authors the resolution, including any replacement implementer.
 2. Instruct the worker to fetch the current base and merge it into the PR
    branch, resolving conflicts to preserve both base changes and the task's
    intent within the agreed scope. Do not rebase or force-push. Run all
@@ -85,18 +90,30 @@ workers; never re-dispatch in a loop with the same instructions.
    co-sign trailer, and push normally to the existing PR branch without force
    flags. Return the new head SHA, a per-file resolution summary, and exact
    validation commands/results. If a push is rejected, refresh remote state
-   without overwriting it; count any further resolution dispatch as another
-   attempt.
-3. After the push, verify the remote head matches the reported SHA and rerun
-   the deterministic gates; if it changed again, return to auto-merge step 1.
+   without overwriting it and apply the same failure budget.
+3. After the push, read the actual remote head SHA. If it differs from the
+   reported SHA, discard validation/review evidence for the reported head;
+   identify the actual head's resolution authors and verify it below. If the
+   head moves during verification, restart verification on the actual head
+   without resetting the episode or failure count.
+   Rerun the full deterministic gates on that actual head. On failure, count
+   the failed attempt against the episode's budget and, if budget remains,
+   send the concrete failing commands/results back to the SAME implementer
+   via step 1 (or its recorded recovery replacement); otherwise escalate.
+   Do not review or merge a failing head. Handle worker failures and
+   blocking reviews through that same bounded fix-task path.
    Follow `cross-review` with a fresh immutable diff snapshot against the
-   current base, recording both base/head SHAs, and a DIFFERENT-vendor
-   reviewer. The old review cannot carry over to the new head. Only after
-   gates pass and the new head has a clean review, resume at auto-merge step 1;
+   current base, recording both base/head SHAs. The reviewer's vendor must
+   differ from every implementer who actually authored the resolution,
+   including a recovered replacement; follow `cross-review`'s availability
+   rules if no eligible reviewer exists. The old review cannot carry over to
+   the new head. Only after gates pass, the actual head has a clean review,
+   and fresh status confirms the conflict resolved, close the episode, reset
+   its failure count, and resume at auto-merge step 1;
    a branch containing the base merge commit must use `--squash` with the
    newly reviewed `--match-head-commit`.
 4. Escalate genuine unresolved product/behavior or scope decisions with
-   concrete conflicting files and options, a conflict still unresolved after
-   two attempts with their failure results, or a repository that prohibits
-   the necessary squash method.
+   concrete conflicting files and options, an episode still unresolved after
+   two failed attempts with their results, or a repository that prohibits the
+   necessary squash method.
    Leave the PR open and retain all checks, approvals, and branch protections.
