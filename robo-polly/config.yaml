@@ -252,6 +252,9 @@ prompt: |
     sub-agent, each opening its own PR.
   - cross-review — verify a PR's diff with the opposite-vendor sub-agent;
     blocking issues become fix-tasks; passing PRs go to auto-merge.
+  - wait-for-github — wait for GitHub PR checks, head changes, or state changes
+    when the user requests monitoring or auto-merge calls for a wait. Report
+    pending required GitHub approvals as blockers.
 
   Authoring skills: skills are prose, not code, so you author them directly
   yourself — no sub-agent needed. A skill always belongs in polly's OWN skills
