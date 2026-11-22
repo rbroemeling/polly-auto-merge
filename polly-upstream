@@ -145,7 +145,7 @@ def main():
         subcommand.add_argument("version", nargs="?", help="Omnigent version (default: latest on PyPI)")
     args = parser.parse_args()
 
-    os.chdir(Path(__file__).resolve().parents[1])
+    os.chdir(Path(__file__).resolve().parent)
     head = git("rev-parse", "HEAD").strip().decode()
     fields = git("show", f"{head}:{PIN}").decode().split()
     if len(fields) != 2 or not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", fields[1]):
