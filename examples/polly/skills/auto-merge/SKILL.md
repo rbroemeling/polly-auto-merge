@@ -31,8 +31,8 @@ not to.
    branch protections. Do not use `--auto`. If GitHub does not allow the merge
    yet, wait for PR events instead of polling. Start this in the background:
    `gh event listen --resource <pr-url> --event com.github.pull_request.review.submitted.v1,com.github.pull_request.check_suite.status.changed.v1,com.github.pull_request.head.changed.v1,com.github.pull_request.state.changed.v1,com.github.pull_request.merge_conflict.v1`
-   Each time it prints `Listening for events.` to stderr, check the PR again,
-   because earlier events are not replayed. When it exits after an event,
+   Each time it prints a `Listening for events` line to stderr, check the PR
+   again, because earlier events are not replayed. When it exits after an event,
    return to step 1. An event only prompts this recheck; GitHub's requirements
    still decide. Each check-suite event covers one suite, and commit statuses
    send none, so read all checks with `gh pr checks`. If `gh event listen` is
