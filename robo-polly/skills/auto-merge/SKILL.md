@@ -31,17 +31,45 @@ not to.
    the blocker and leave the PR open. Base any squash commit message on the
    checked title and description.
 
-4. Merge with an explicit repository and the reviewed head pinned:
-   `gh pr merge <number> --repo <owner/repo> --rebase --match-head-commit <reviewed-head-sha>`
-   or
-   `gh pr merge <number> --repo <owner/repo> --squash --subject "<subject>" --body "<body>" --match-head-commit <reviewed-head-sha>`
+4. Submit the reviewed head to GitHub. Report pending required GitHub
+   approvals as blockers.
+   - On `github.com`, read the PR's `isMergeQueueEnabled` and
+     `mergeQueueEntry { id }` with `gh api graphql`. Report a blocker if the
+     queue requirement cannot be verified. If a queue is required, verify
+     that `repository.mergeQueue(branch: <baseRefName>).configuration.mergeMethod`
+     matches the method chosen in step 2. Report a blocker if the method
+     differs or cannot be verified. If the PR is already queued, go to step 5.
+     Otherwise use the `enqueuePullRequest` GraphQL mutation with the PR node
+     ID as `pullRequestId` and the reviewed head SHA as `expectedHeadOid`.
+     Request `mergeQueueEntry { id }` in the response and go to step 5 on
+     successful enqueue. `gh pr merge` can implicitly enable auto-merge on a
+     queue-required branch.
+   - For a direct merge, use
+     `gh pr merge <number> --repo <owner/repo> --rebase --match-head-commit <reviewed-head-sha>`
+     or
+     `gh pr merge <number> --repo <owner/repo> --squash --subject "<subject>" --body "<body>" --match-head-commit <reviewed-head-sha>`.
+
    Never use `--admin` or otherwise bypass required checks, approvals, or
-   branch protections. Do not use `--auto`. If required checks are pending,
-   use `wait-for-github` on the reviewed head. If it is still current and
-   checks pass on an open, non-draft PR, retry from step 3. If GitHub still
-   reports pending, await an event or timeout before retrying within the same
-   deadline. For an already merged PR, go to step 5. If the head changed on
-   an open, non-draft PR, go to step 1. Otherwise report the blocker.
-5. Confirm with `gh pr view <number> --repo <owner/repo> --json state,mergeCommit`
-   that the state is `MERGED`. Otherwise report the PR as not merged, with
-   GitHub's blocker.
+   branch protections. Do not enable GitHub auto-merge. If the submission
+   result is unclear, refresh PR state and queue membership before retrying.
+   If GitHub reports that the PR is merged or queued, go to step 5.
+   If required checks are pending, use `wait-for-github` on the reviewed head.
+   If it is still current and checks pass on an open, non-draft PR, retry from
+   step 3. If GitHub still reports pending, await an event or timeout before
+   retrying within the same deadline.
+   If the head changed on an open, non-draft PR, go to step 1. Otherwise
+   report the blocker.
+5. Confirm a direct merge with
+   `gh pr view <number> --repo <owner/repo> --json state,isDraft,headRefOid,mergeCommit`.
+   For a queued PR, use `wait-for-github` on the reviewed head with PR state
+   and head change events and the same deadline. On each refresh read
+   `state`, `isDraft`, `headRefOid`, `mergeCommit { oid }`, and
+   `mergeQueueEntry { id }` together with `gh api graphql`. Queue checks can
+   run on a merge group commit, so use PR state to confirm the merge.
+   - Confirm success when GitHub reports `MERGED` for the reviewed head. If
+     GitHub merged a different head, report the mismatch.
+   - If the head changed on an open, non-draft PR, go to step 1.
+   - If the PR is still open and non-draft and GitHub removed the queue entry,
+     report the removal and any reason GitHub gives. If the deadline expires
+     and the entry is still present, report that the PR is still queued.
+   - Report any other blocker GitHub gives, including closure or draft status.
