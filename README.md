@@ -1,8 +1,8 @@
 # RoboPolly
 
-Default Polly delegates implementation and independent review, then leaves merging to a human. RoboPolly (`robo-polly`) keeps that workflow and also merges scoped PRs once review, validation, and GitHub's requirements pass.
+Default Polly agents delegate implementation and independent review, then leave merging to a human. RoboPolly (`robo-polly`) agents keep that workflow and also merge scoped PRs once review, validation, and GitHub's requirements pass.
 
-Modified from `examples/polly` in https://github.com/omnigent-ai/omnigent (Apache-2.0; see `LICENSE` and `NOTICE`).
+RoboPolly is meant to be the thinnest possible changeset on top of the default Polly agent in https://github.com/omnigent-ai/omnigent (Apache-2.0; see `LICENSE` and `NOTICE`).
 
 ## Tracking Upstream Polly
 
