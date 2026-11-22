@@ -36,8 +36,22 @@ not to.
    or
    `gh pr merge <number> --repo <owner/repo> --squash --subject "<subject>" --body "<body>" --match-head-commit <reviewed-head-sha>`
    Never use `--admin` or otherwise bypass required checks, approvals, or
-   branch protections. Do not use `--auto`. If required checks are still
-   pending, wait and retry from step 3.
+   branch protections. Do not use `--auto`.
+   - If GitHub is waiting on required checks, load `wait-for-github` with the
+     PR URL, reviewed head SHA, and the condition that required checks pass.
+     End the wait early on failing or cancelled required checks, or if the PR
+     ceases to be open and ready for review. Use the check suite, head, and
+     state events, then decide whether to retry from the fresh status.
+   - If the head changed and the PR is still open and ready for review, go
+     back to step 1. If the checks passed and the reviewed head is still
+     current on an open PR ready for review, return to step 3 before retrying
+     the same pinned merge.
+     If that retry still reports pending checks, keep the original deadline
+     and wait for an event or timed refresh before another attempt, even if
+     the check list already shows green.
+   - If the PR was already merged, go to step 5. If it closed, became a draft,
+     has failing required checks or another merge blocker, or the wait expired
+     with checks pending, report the blocker and keep the PR unmerged.
 5. Confirm with `gh pr view <number> --repo <owner/repo> --json state,mergeCommit`
    that the state is `MERGED`. Otherwise report the PR as not merged, with
    GitHub's blocker.
