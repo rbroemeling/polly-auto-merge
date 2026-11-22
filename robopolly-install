@@ -3,11 +3,19 @@ set -eu
 
 cd -- "$(dirname -- "$0")"
 git fetch --no-tags --no-write-fetch-head origin +refs/heads/main:refs/remotes/origin/main
+main=$(git rev-parse --verify refs/remotes/origin/main)
+
+staged_changes=$(git diff --cached --name-only "$main" -- robo-polly/)
+worktree_changes=$(git diff --name-only "$main" -- robo-polly/)
+untracked_files=$(git ls-files --others --exclude-standard -- robo-polly/)
+if [ -n "$staged_changes$worktree_changes$untracked_files" ]; then
+    printf '%s\n' 'Warning: Local robo-polly/ content differs from the origin/main bundle being installed.' >&2
+fi
 
 temp_dir=$(mktemp -d "${TMPDIR:-/tmp}/robo-polly.XXXXXXXXXX")
 trap 'rm -rf -- "$temp_dir"' EXIT
 trap 'exit 1' HUP INT TERM
 
 bundle="$temp_dir/robo-polly.tar.gz"
-git archive --format=tar.gz --output="$bundle" refs/remotes/origin/main:robo-polly
+git archive --format=tar.gz --output="$bundle" "$main:robo-polly"
 omnigent agent add "$bundle" --server local

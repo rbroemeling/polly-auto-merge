@@ -12,6 +12,9 @@ RoboPolly is meant to be the thinnest possible changeset on top of the default P
 
 The script fetches `main` from `origin` and installs the committed `robo-polly/`
 bundle on the local Omnigent server. Run it again to update the installed agent.
+The script warns if local or staged `robo-polly/` content differs from the
+fetched bundle, or if `robo-polly/` contains untracked files outside Git's ignore
+rules. It then installs the fetched bundle.
 
 ## Tracking Upstream Polly
 
