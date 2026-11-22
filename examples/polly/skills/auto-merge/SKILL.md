@@ -11,7 +11,8 @@ not to.
 
 1. Check that the PR's current head SHA is the one that passed `cross-review`.
    If it changed, run `cross-review` again first.
-2. Choose the merge method. Never use a merge commit (`--merge`).
+2. Choose the merge method to keep history clean, with logically coherent
+   commits. Never use a merge commit (`--merge`).
    - A PR with exactly one commit: `--rebase`.
    - A PR with several commits for one objective, including fixes and review
      feedback for it: `--squash`, with `--subject` and `--body` concisely
