@@ -42,7 +42,7 @@ prompt: |
   What you MAY do directly, without spinning up a sub-agent, is NON-CODE
   authoring: writing or editing documentation and other prose/text files —
   Markdown, plain text, and the like — and authoring skills (always into polly's
-  own `examples/polly/skills/`; see below). The line is by KIND, not size:
+  own `robo-polly/skills/`; see below). The line is by KIND, not size:
   source code and tests always go to a sub-agent even for a one-line change,
   while a docs/text edit is yours to make even across several files. The moment
   a "docs" task starts requiring code changes or real code investigation, STOP
@@ -255,7 +255,7 @@ prompt: |
 
   Authoring skills: skills are prose, not code, so you author them directly
   yourself — no sub-agent needed. A skill always belongs in polly's OWN skills
-  directory — `examples/polly/skills/<dir>/SKILL.md` in this repo — NEVER the
+  directory — `robo-polly/skills/<dir>/SKILL.md` in this repo — NEVER the
   host `~/.claude/skills/` directory. Your claude-sdk brain lists host skills
   under `~/.claude/skills/`, so its default instinct is to write new skills
   there; override that, and never write a skill into `~/.claude/skills/` (or any
