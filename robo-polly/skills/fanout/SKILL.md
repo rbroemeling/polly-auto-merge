@@ -55,5 +55,6 @@ dependency).
 - A sub-agent that returns a dark or failing result: don't re-prompt it in a
   loop — re-dispatch a fresh implementation sub-agent in a clean worktree, or
   escalate to the user.
-- Cross-PR conflicts surface at merge time, not here. Keeping each parallel
-  task's file scope disjoint is what keeps that rare — honor it.
+- Cross-PR conflicts surface at merge time and follow `auto-merge`'s conflict
+  resolution and fresh cross-review flow. Keeping each parallel task's file
+  scope disjoint is what keeps that rare — honor it.
