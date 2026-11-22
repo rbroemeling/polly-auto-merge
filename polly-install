@@ -1,0 +1,13 @@
+#!/bin/sh
+set -eu
+
+cd -- "$(dirname -- "$0")"
+git fetch --no-tags --no-write-fetch-head origin +refs/heads/main:refs/remotes/origin/main
+
+temp_dir=$(mktemp -d "${TMPDIR:-/tmp}/robo-polly.XXXXXXXXXX")
+trap 'rm -rf -- "$temp_dir"' EXIT
+trap 'exit 1' HUP INT TERM
+
+bundle="$temp_dir/robo-polly.tar.gz"
+git archive --format=tar.gz --output="$bundle" refs/remotes/origin/main:robo-polly
+omnigent agent add "$bundle" --server local
