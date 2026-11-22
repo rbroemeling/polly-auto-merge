@@ -1,0 +1,185 @@
+#!/usr/bin/env python3
+"""Compare and update RoboPolly against Polly from published Omnigent wheels."""
+
+import argparse
+import hashlib
+import io
+import json
+import os
+from pathlib import Path
+import re
+import stat
+import subprocess
+import sys
+import tempfile
+from urllib.parse import quote
+from urllib.request import urlopen
+from zipfile import BadZipFile, ZipFile
+
+
+BUNDLE = "robo-polly"
+PIN = "polly-upstream.lock"
+WHEEL_PREFIX = "omnigent/resources/examples/polly/"
+PYPI_PROJECT = "https://pypi.org/pypi/omnigent"
+
+
+def git(*args, data=None, env=None, capture=True):
+    return subprocess.run(
+        ("git", *args), input=data, env=env, check=True,
+        stdout=subprocess.PIPE if capture else None,
+    ).stdout
+
+
+def release(version=None):
+    path = "" if version is None else "/" + quote(version, safe="")
+    with urlopen(f"{PYPI_PROJECT}{path}/json", timeout=30) as response:
+        metadata = json.load(response)
+    wheels = [
+        file for file in metadata["urls"]
+        if file["filename"].endswith("-py3-none-any.whl")
+        and (version is not None or not file["yanked"])
+    ]
+    resolved = metadata["info"]["version"]
+    if len(wheels) != 1:
+        raise ValueError(f"Expected one universal wheel for Omnigent {resolved}.")
+    return resolved, wheels[0]
+
+
+def wheel_tree(wheel):
+    with urlopen(wheel["url"], timeout=60) as response:
+        content = response.read()
+    if hashlib.sha256(content).hexdigest() != wheel["digests"]["sha256"]:
+        raise ValueError(f"SHA-256 mismatch for {wheel['filename']}.")
+
+    # Build a Git tree directly from the wheel bytes and Unix file modes.
+    # The temporary index keeps the working tree and its index out of this step.
+    entries = {}
+    with ZipFile(io.BytesIO(content)) as archive:
+        for member in archive.infolist():
+            if member.is_dir() or not member.filename.startswith(WHEEL_PREFIX):
+                continue
+            path = member.filename[len(WHEEL_PREFIX):]
+            if (path in entries or "\\" in path or
+                    any(part.lower() in {"", ".", "..", ".git"} for part in path.split("/"))):
+                raise ValueError(f"Invalid or duplicate Polly wheel path {path!r}.")
+            mode = member.external_attr >> 16
+            if stat.S_IFMT(mode) not in {0, stat.S_IFREG}:
+                raise ValueError(f"Unsupported file type for {path!r} in the Polly wheel.")
+            git_mode = b"100755" if mode & stat.S_IXUSR else b"100644"
+            blob = git("hash-object", "-w", "--stdin", data=archive.read(member)).strip()
+            entries[path] = git_mode + b" " + blob + b"\t" + path.encode() + b"\0"
+    if "config.yaml" not in entries:
+        raise ValueError(f"No Polly config found at {WHEEL_PREFIX}config.yaml in {wheel['filename']}.")
+
+    with tempfile.TemporaryDirectory(prefix="polly-index-") as temp:
+        env = dict(os.environ, GIT_INDEX_FILE=str(Path(temp) / "index"))
+        git("update-index", "-z", "--index-info", data=b"".join(entries.values()), env=env)
+        return git("write-tree", env=env).strip().decode()
+
+
+def pinned_tree(version, expected):
+    found = subprocess.run(
+        ("git", "cat-file", "-t", expected), capture_output=True,
+    )
+    if found.stdout == b"tree\n":
+        return expected
+
+    _, wheel = release(version)
+    actual = wheel_tree(wheel)
+    if actual != expected:
+        raise ValueError(f"Polly in Omnigent {version} has tree {actual}, expected {expected}.")
+    return actual
+
+
+def show_diff(old, new):
+    git("diff", "--no-ext-diff", "--no-textconv", "--find-renames", old, new, "--", capture=False)
+
+
+def require_clean():
+    # Cherry-pick can overwrite ignored files. Protect those inside its scope too.
+    if (git("status", "--porcelain", "--untracked-files=all") or
+            git("ls-files", "--others", "--ignored", "--exclude-standard", "--", BUNDLE, PIN)):
+        raise ValueError("Update requires a clean worktree, including ignored files in the Polly bundle.")
+    for state in ("MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "rebase-merge",
+                  "rebase-apply", "sequencer"):
+        path = Path(os.fsdecode(git("rev-parse", "--git-path", state).rstrip(b"\n")))
+        if path.exists():
+            raise ValueError("Finish the Git operation in progress before updating Polly.")
+
+
+def update(head, old_tree, new_tree, version):
+    # Give Git a synthetic commit for the pristine upstream delta. Copy all
+    # other root entries from HEAD so rename detection stays scoped to Polly.
+    root_entries = {
+        entry.split(b"\t", 1)[1]: entry
+        for entry in git("ls-tree", "-z", head).split(b"\0") if entry
+    }
+
+    def snapshot(polly_tree):
+        root_entries[BUNDLE.encode()] = f"040000 tree {polly_tree}\t{BUNDLE}".encode()
+        return git("mktree", "-z", data=b"\0".join(root_entries.values()) + b"\0").strip().decode()
+
+    base = git("commit-tree", "--no-gpg-sign", snapshot(old_tree),
+               "-m", "Pristine Polly baseline").strip().decode()
+    pin_blob = git("hash-object", "-w", "--stdin", data=f"{version} {new_tree}\n".encode()).strip().decode()
+    root_entries[PIN.encode()] = f"100644 blob {pin_blob}\t{PIN}".encode()
+    change = git("commit-tree", "--no-gpg-sign", snapshot(new_tree), "-p", base,
+                 "-m", f"Update Polly to Omnigent {version}").strip().decode()
+    require_clean()
+    if git("rev-parse", "HEAD").strip().decode() != head:
+        raise ValueError("HEAD changed while fetching Polly. Run the update again.")
+
+    # A regular cherry-pick gives conflicts the usual --continue / --abort workflow.
+    git("cherry-pick", change, capture=False)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest="command", required=True)
+    commands.add_parser("diff", help="show the committed RoboPolly customizations")
+    for command, help_text in (
+        ("check", "show upstream changes since the pinned release"),
+        ("update", "cherry-pick upstream changes and advance the pin"),
+    ):
+        subcommand = commands.add_parser(command, help=help_text)
+        subcommand.add_argument("version", nargs="?", help="Omnigent version (default: latest on PyPI)")
+    args = parser.parse_args()
+
+    os.chdir(Path(__file__).resolve().parents[1])
+    head = git("rev-parse", "HEAD").strip().decode()
+    fields = git("show", f"{head}:{PIN}").decode().split()
+    if len(fields) != 2 or not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", fields[1]):
+        raise ValueError(f"Expected an Omnigent version and Git tree ID in {PIN}.")
+    pinned_version, expected = fields
+
+    if args.command == "diff":
+        print(f"Pristine Polly {pinned_version} -> RoboPolly at HEAD", flush=True)
+        show_diff(pinned_tree(pinned_version, expected), f"{head}:{BUNDLE}")
+        return
+
+    if args.command == "update":
+        require_clean()
+    version, wheel = release(args.version)
+    if version == pinned_version:
+        print(f"Polly is already pinned to Omnigent {version}.")
+        return
+
+    old_tree = pinned_tree(pinned_version, expected)
+    new_tree = wheel_tree(wheel)
+    if args.command == "check":
+        print(f"Upstream Polly {pinned_version} -> {version}", flush=True)
+        if old_tree == new_tree:
+            print("The releases contain identical Polly bundles.")
+        else:
+            show_diff(old_tree, new_tree)
+    else:
+        update(head, old_tree, new_tree, version)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except subprocess.CalledProcessError as error:
+        sys.exit(error.returncode)
+    except (BadZipFile, KeyError, OSError, ValueError) as error:
+        sys.exit(f"polly-upstream: {error}")
